@@ -32,8 +32,8 @@ func NewOutputFlag() *cli.Flag {
 		Shorthand:    'o',
 		AssignedMode: cli.AssignedRepeatable,
 		Short: i18n.T(
-			"use `--output cols=Field1,Field2 [rows=jmesPath]` to print output as table",
-			"使用 `--output cols=Field1,Field1 [rows=jmesPath]` 使用表格方式打印输出",
+			"use `--output cols=Title1:Field1,Title2:Field2 [rows=jmesPath]` to print output as table",
+			"使用 `--output cols=Title1:Field1,Title2:Field2 [rows=jmesPath]` 使用表格方式打印输出",
 		),
 		Long: i18n.T(
 			"",
@@ -112,16 +112,35 @@ func (a *TableOutputFilter) FormatTable(rowPath string, colNames []string, v int
 		return "", fmt.Errorf("jmespath: '%s' failed Need Array Expr", rowPath)
 	}
 
+	// Make up colMapping object for overriding the column title
+	colMapping := map[string]string{}
+	colTitles := []string {}
+	for _, col := range colNames {
+		if strings.Contains(col, ":") {
+			coldef := strings.SplitN(col, ":", 2)
+			if len(coldef[0]) == 0 || len(coldef[1]) == 0 {
+				colMapping[col] = col
+				colTitles = append(colTitles, col)
+			} else {
+				colMapping[coldef[0]] = coldef[1]
+				colTitles = append(colTitles, coldef[0])
+			}
+		} else {
+			colMapping[col] = col
+			colTitles = append(colTitles, col)
+		}
+	}
+
 	var buf bytes.Buffer
 	writer := bufio.NewWriter(&buf)
-	format := strings.Repeat("%v\t ", len(colNames)-1) + "%v"
+	format := strings.Repeat("%v\t ", len(colTitles)-1) + "%v"
 	w := tabwriter.NewWriter(writer, 0, 0, 1, ' ', tabwriter.Debug)
-	fmt.Fprintln(w, fmt.Sprintf(format, toIntfArray(colNames)...))
+	fmt.Fprintln(w, fmt.Sprintf(format, toIntfArray(colTitles)...))
 
 	separator := ""
-	for i, colName := range colNames {
+	for i, colName := range colTitles {
 		separator = separator + strings.Repeat("-", len(colName))
-		if i < len(colNames)-1 {
+		if i < len(colTitles)-1 {
 			separator = separator + "\t "
 		}
 	}
@@ -142,8 +161,8 @@ func (a *TableOutputFilter) FormatTable(rowPath string, colNames []string, v int
 				index = 1
 			}
 		}
-		for _, colName := range colNames[index:] {
-			v, _ := jmespath.Search(colName, rowIntf)
+		for _, colName := range colTitles[index:] {
+			v, _ := jmespath.Search(colMapping[colName], rowIntf)
 			s = fmt.Sprintf("%v", v)
 			r = append(r, s)
 		}
